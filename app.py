@@ -1,4 +1,3 @@
-# app.py
 """Movie Shadowing - practice English by listening to movie dialogue lines via TTS."""
 
 import os
@@ -22,10 +21,8 @@ st.caption(
 )
 
 # --- Session state defaults ---
-st.session_state.setdefault(
-    "api_key",
-    os.environ.get("OPENSUBTITLES_API_KEY", "")
-)
+st.session_state.setdefault("api_key", os.environ.get("OPENSUBTITLES_API_KEY", ""))
+st.session_state.setdefault("groq_api_key", os.environ.get("GROQ_API_KEY", ""))
 st.session_state.setdefault("search_results", [])
 st.session_state.setdefault("lines", None)
 st.session_state.setdefault("lines_flat", [])
@@ -37,31 +34,31 @@ st.session_state.setdefault("active_line", None)
 st.session_state.setdefault("vocab_target", None)
 st.session_state.setdefault("pronunciation_results", {})
 st.session_state.setdefault("recorder_nonce", 0)
-st.session_state.setdefault("groq_api_key", os.environ.get("GROQ_API_KEY", ""))
 
 
 # --- Sidebar: API key + accent ---
 with st.sidebar:
     st.header("Settings")
 
-    if not st.session_state.api_key:
-        st.session_state.api_key = st.text_input(
-            "OpenSubtitles API key",
-            type="password",
-            help="Free key from opensubtitles.com/consumers",
-        )
-        
-    if not st.session_state.groq_api_key:
-        st.session_state.groq_api_key = st.text_input(
-            "Groq API Key",
-            type="password",
-            help="Required for word explanations. Get one at console.groq.com.",
-        )
+    # Using key="..." safely binds the widget directly to session_state
+    # without losing focus when the user types.
+    st.text_input(
+        "OpenSubtitles API key",
+        type="password",
+        help="Free key from opensubtitles.com/consumers",
+        key="api_key"
+    )
+    
+    st.text_input(
+        "Groq API Key",
+        type="password",
+        help="Required for word explanations. Get one at console.groq.com.",
+        key="groq_api_key"
+    )
 
     accent = st.radio("TTS accent", list(ACCENT_VOICES.keys()))
 
     st.caption("🇺🇸 American English · 🇬🇧 British English")
-    st.caption("Word lookups need a GROQ_API_KEY environment variable.")
 
 
 # Clear cached audio whenever the accent changes
@@ -74,16 +71,17 @@ api_key = st.session_state.api_key
 if not api_key:
     st.info("Enter your free OpenSubtitles API key in the sidebar to get started.")
 
+# Pass the groq API key into the cached function so if the user fixes a typo in their key,
+# it invalidates the cache and tries again.
 @st.cache_data(show_spinner=False)
-def _cached_explain_word(word: str, sentence: str) -> str:
-    return explain_word(word, sentence)
+def _cached_explain_word(word: str, sentence: str, groq_key: str) -> str:
+    return explain_word(word, sentence, api_key=groq_key)
 
 # --- Movie search ---
 movie_name = st.text_input(
     "Movie name",
     placeholder="e.g. Spider-Man: No Way Home"
 )
-
 
 if st.button("Find subtitles", disabled=not api_key) and movie_name:
     with st.spinner("Searching OpenSubtitles..."):
@@ -100,7 +98,6 @@ if st.button("Find subtitles", disabled=not api_key) and movie_name:
         st.warning(
             "No English subtitles found for that title. Try a more exact name."
         )
-
 
 # --- Pick a specific match and load its subtitles ---
 if st.session_state.search_results:
@@ -254,19 +251,17 @@ if st.session_state.chapters:
                                         )
 
                         if st.session_state.vocab_target:
-                            word, sentence = (
-                                st.session_state.vocab_target
-                            )
+                            word, sentence = st.session_state.vocab_target
 
                             if word:
-                                with st.spinner(
-                                    f'Looking up "{word}"...'
-                                ):
+                                with st.spinner(f'Looking up "{word}"...'):
                                     try:
+                                        # Pass the UI-provided API key through
                                         st.info(
                                             _cached_explain_word(
                                                 word,
                                                 sentence,
+                                                st.session_state.groq_api_key
                                             )
                                         )
                                     except VocabError as e:
