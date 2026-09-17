@@ -37,6 +37,7 @@ st.session_state.setdefault("active_line", None)
 st.session_state.setdefault("vocab_target", None)
 st.session_state.setdefault("pronunciation_results", {})
 st.session_state.setdefault("recorder_nonce", 0)
+st.session_state.setdefault("groq_api_key", os.environ.get("GROQ_API_KEY", ""))
 
 
 # --- Sidebar: API key + accent ---
@@ -48,6 +49,13 @@ with st.sidebar:
             "OpenSubtitles API key",
             type="password",
             help="Free key from opensubtitles.com/consumers",
+        )
+        
+     if not st.session_state.groq_api_key:
+        st.session_state.groq_api_key = st.text_input(
+            "Groq API Key",
+            type="password",
+            help="Required for word explanations. Get one at console.groq.com.",
         )
 
     accent = st.radio("TTS accent", list(ACCENT_VOICES.keys()))
