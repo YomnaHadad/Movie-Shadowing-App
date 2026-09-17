@@ -1,0 +1,8 @@
+streamlit>=1.38
+requests
+srt
+edge-tts
+groq
+nltk
+python-dotenv
+SpeechRecognition
