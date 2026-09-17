@@ -1,5 +1,9 @@
-# vocab_provider.py
 """Vocabulary lookups for Movie Shadowing.
+
+`explain_word(word, sentence)` is the only thing app.py depends on, keeping
+this swappable (e.g. for a different LLM or a dictionary API) without
+touching the rest of the app.
+
 `select_vocab_words(sentence)` returns the words in a sentence worth
 offering an explanation for. Stopwords, one-character words, and very
 common English words (based on frequency in the NLTK Brown corpus) are
@@ -60,11 +64,14 @@ class VocabError(Exception):
     """Raised when a vocabulary operation fails."""
 
 
-def _get_client() -> Groq:
-    load_dotenv()
-    api_key = os.getenv("GROQ_API_KEY")
+def _get_client(api_key: str = None) -> Groq:
     if not api_key:
-        raise VocabError("Set the GROQ_API_KEY environment variable to enable word lookups.")
+        load_dotenv()
+        api_key = os.getenv("GROQ_API_KEY")
+        
+    if not api_key:
+        raise VocabError("Please enter your Groq API key in the sidebar to enable word lookups.")
+        
     return Groq(api_key=api_key)
 
 
@@ -94,14 +101,14 @@ def filter_sentence_words(sentence: str) -> list[str]:
     return select_vocab_words(sentence)
 
 
-def explain_word(word: str, sentence: str) -> str:
+def explain_word(word: str, sentence: str, api_key: str = None) -> str:
     """Explain `word`'s meaning as it's used in `sentence`."""
     if not word or not word.strip():
         raise VocabError("Vocabulary word cannot be empty.")
     if not sentence or not sentence.strip():
         raise VocabError("Sentence cannot be empty.")
 
-    client = _get_client()
+    client = _get_client(api_key)
 
     prompt = f"""You are an English teacher helping a learner understand vocabulary.
 
