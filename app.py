@@ -51,7 +51,7 @@ with st.sidebar:
             help="Free key from opensubtitles.com/consumers",
         )
         
-     if not st.session_state.groq_api_key:
+    if not st.session_state.groq_api_key:
         st.session_state.groq_api_key = st.text_input(
             "Groq API Key",
             type="password",
