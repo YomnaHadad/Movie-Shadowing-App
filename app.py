@@ -48,13 +48,15 @@ with st.sidebar:
         help="Free key from opensubtitles.com/consumers",
         key="api_key"
     )
-    
+    st.markdown("[Get an OpenSubtitles API key](https://www.opensubtitles.com/consumers)")
+
     st.text_input(
         "Groq API Key",
         type="password",
         help="Required for word explanations. Get one at console.groq.com.",
         key="groq_api_key"
     )
+    st.markdown("[Get a Groq API key](https://console.groq.com/keys)")
 
     accent = st.radio("TTS accent", list(ACCENT_VOICES.keys()))
 
