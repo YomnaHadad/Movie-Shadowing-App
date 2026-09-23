@@ -1,8 +1,6 @@
 """Vocabulary lookups for Movie Shadowing.
 
-`explain_word(word, sentence)` is the only thing app.py depends on, keeping
-this swappable (e.g. for a different LLM or a dictionary API) without
-touching the rest of the app.
+`explain_word(word, sentence)` is the only thing app.py depends on.
 
 `select_vocab_words(sentence)` returns the words in a sentence worth
 offering an explanation for. Stopwords, one-character words, and very
@@ -101,64 +99,99 @@ def filter_sentence_words(sentence: str) -> list[str]:
     return select_vocab_words(sentence)
 
 
+
 def explain_word(word: str, sentence: str, api_key: str = None) -> str:
     """Explain `word`'s meaning as it's used in `sentence`."""
     if not word or not word.strip():
         raise VocabError("Vocabulary word cannot be empty.")
+
     if not sentence or not sentence.strip():
         raise VocabError("Sentence cannot be empty.")
 
     client = _get_client(api_key)
 
-    prompt = f"""You are an English teacher helping a learner understand vocabulary.
+    prompt = f"""
+You are an English teacher helping a learner understand vocabulary.
 
-Target word:
-{word}
+Target word: {word}
 
 Sentence:
 {sentence}
 
 Explain ONLY the meaning of the target word as it is used in this sentence.
 
-Return valid JSON only:
+Give:
+1. easy_word: one simple synonym or short equivalent phrase.
+2. meaning_in_sentence: a short and clear explanation of what the word means in this exact context.
 
-{{
-  "easy_word": "one simple synonym or short equivalent phrase",
-  "meaning_in_sentence": "a clear, simple explanation of the word's meaning in this exact context"
-}}
+Do not explain other meanings.
+Do not give examples.
+Do not give grammar information.
+"""
 
-Do not provide unrelated meanings.
-Do not provide a dictionary-style list of meanings.
-Do not add examples.
-Do not add Markdown."""
+    try:
+        response = client.chat.completions.create(
+            model=_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            temperature=0,
+            max_completion_tokens=300,
+            reasoning_format="hidden",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "word_explanation",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "easy_word": {
+                                "type": "string"
+                            },
+                            "meaning_in_sentence": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "easy_word",
+                            "meaning_in_sentence"
+                        ],
+                        "additionalProperties": False
+                    }
+                }
+            },
+        )
 
-    last_error = None
-    for _ in range(2):
-        try:
-            response = client.chat.completions.create(
-                model=_MODEL,
-                max_tokens=180,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}],
+        content = response.choices[0].message.content
+
+        if not content:
+            raise VocabError(
+                f"Groq returned an empty explanation for '{word}'."
             )
-            content = response.choices[0].message.content
-            if not content:
-                raise ValueError("Empty response from Groq.")
 
-            content = content.strip()
-            content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
-            content = re.sub(r"\s*```$", "", content).strip()
+        data = json.loads(content)
 
-            data = json.loads(content)
-            easy_word = str(data.get("easy_word", "")).strip()
-            meaning = str(data.get("meaning_in_sentence", "")).strip()
+        easy_word = data["easy_word"].strip()
+        meaning = data["meaning_in_sentence"].strip()
 
-            if not easy_word or not meaning:
-                raise ValueError("Groq response is missing required fields.")
+        if not easy_word or not meaning:
+            raise VocabError(
+                f"Groq returned an incomplete explanation for '{word}'."
+            )
 
-            return f"**Simple meaning:** {easy_word}\n\n**In this context:** {meaning}"
+        return (
+            f"**Simple meaning:** {easy_word}\n\n"
+            f"**In this context:** {meaning}"
+        )
 
-        except Exception as e:
-            last_error = e
+    except VocabError:
+        raise
 
-    raise VocabError(f"Could not generate explanation for '{word}'.") from last_error
+    except Exception as e:
+        raise VocabError(
+            f"Could not generate explanation for '{word}': {e}"
+        ) from e
